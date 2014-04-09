@@ -83,4 +83,3 @@ func (c *Connection) ReadMultiLines() (lines []string, err error) {
 
 	return
 }
-

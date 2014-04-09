@@ -1,8 +1,8 @@
 package pop3
 
 import (
-	"errors"
 	"crypto/tls"
+	"errors"
 	"net"
 	"strconv"
 	"strings"
@@ -15,8 +15,8 @@ type Client struct {
 
 // MessageInfo represents the message attributes returned by a LIST command.
 type MessageInfo struct {
-	Seq 		uint32 // Message sequence number
-	Size        uint32 // Message size in bytes
+	Seq  uint32 // Message sequence number
+	Size uint32 // Message size in bytes
 }
 
 var lineSeparator = "\n"
@@ -93,8 +93,8 @@ func (client *Client) Stat() (count, size uint32, err error) {
 	return
 }
 
-// List returns the size of the message referenced by the sequence number, 
-// if it exists. If the message does not exist, or another error is encountered, 
+// List returns the size of the message referenced by the sequence number,
+// if it exists. If the message does not exist, or another error is encountered,
 // the returned size will be 0.
 func (client *Client) List(msgSeqNum uint32) (size uint32, err error) {
 	l, err := client.Text.Cmd("LIST %d", msgSeqNum)
@@ -132,7 +132,7 @@ func (client *Client) ListAll() (msgInfos []*MessageInfo, err error) {
 			return
 		}
 		msgInfos[i] = &MessageInfo{
-			Seq: seq,
+			Seq:  seq,
 			Size: size,
 		}
 	}
@@ -196,7 +196,7 @@ func (client *Client) Uidl(msgSeqNum uint32) (uid uint32, err error) {
 func stringToUint32(intString string) (uint32, error) {
 	val, err := strconv.Atoi(intString)
 	if err != nil {
-    	return 0, err
+		return 0, err
 	}
 	return uint32(val), nil
 }

@@ -10,9 +10,10 @@ import (
 	"time"
 )
 
-type fakeAddr struct {}
+type fakeAddr struct{}
+
 func (fakeAddr) Network() string { return "" }
-func (fakeAddr) String() string { return "" }
+func (fakeAddr) String() string  { return "" }
 
 type connFaker struct {
 	Buffer *bytes.Buffer
@@ -51,10 +52,10 @@ func serverFaker(responseLines string) *connFaker {
 	var fake = &connFaker{Buffer: &commandBuffer, Writer: bufferWriter}
 	fake.ReadWriter = bufio.NewReadWriter(bufio.NewReader(strings.NewReader(basicServer)), bufferWriter)
 
-	return fake	
+	return fake
 }
 
-func TestBasic (t *testing.T) {
+func TestBasic(t *testing.T) {
 	basicClient := strings.Join(strings.Split(basicClient, "\n"), "\r\n")
 
 	fakeConn := serverFaker(basicServer)
