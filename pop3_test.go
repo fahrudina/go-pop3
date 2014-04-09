@@ -45,7 +45,7 @@ func (f connFaker) SetWriteDeadline(t time.Time) error {
 	return nil
 }
 
-func serverFaker(responseLines string) *connFaker {
+func initializeFakeConn(responseLines string) *connFaker {
 	basicServer := strings.Join(strings.Split(responseLines, "\n"), "\r\n")
 	var commandBuffer bytes.Buffer
 	bufferWriter := bufio.NewWriter(&commandBuffer)
@@ -58,7 +58,7 @@ func serverFaker(responseLines string) *connFaker {
 func TestBasic(t *testing.T) {
 	basicClient := strings.Join(strings.Split(basicClient, "\n"), "\r\n")
 
-	fakeConn := serverFaker(basicServer)
+	fakeConn := initializeFakeConn(basicServer)
 
 	c, err := NewClient(fakeConn)
 	if err != nil {

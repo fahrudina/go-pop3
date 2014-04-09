@@ -52,6 +52,7 @@ func (c *Connection) ReadResponse() (result string, err error) {
 
 	line := string(response)
 	if line[0:3] != okResponse {
+
 		err = errors.New(line[5:])
 	}
 

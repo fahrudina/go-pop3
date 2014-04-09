@@ -181,15 +181,12 @@ func (client *Client) Quit() (err error) {
 }
 
 // Uidl retrieves the unique ID of the message referenced by the sequence number.
-func (client *Client) Uidl(msgSeqNum uint32) (uid uint32, err error) {
-	line, err := client.Text.Cmd("LIST %d", msgSeqNum)
+func (client *Client) Uidl(msgSeqNum uint32) (uid string, err error) {
+	line, err := client.Text.Cmd("UIDL %d", msgSeqNum)
 	if err != nil {
-		return 0, err
+		return "", err
 	}
-	uid, err = stringToUint32(strings.Fields(line)[1])
-	if err != nil {
-		return 0, errors.New("Invalid server response")
-	}
+	uid = strings.Fields(line)[1]
 	return
 }
 
