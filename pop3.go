@@ -17,6 +17,7 @@ type Client struct {
 type MessageInfo struct {
 	Seq  uint32 // Message sequence number
 	Size uint32 // Message size in bytes
+	Uid  string // Message UID
 }
 
 var lineSeparator = "\n"
@@ -187,6 +188,34 @@ func (client *Client) Uidl(msgSeqNum uint32) (uid string, err error) {
 		return "", err
 	}
 	uid = strings.Fields(line)[1]
+	return
+}
+
+// Uidl retrieves the unique ID of the message referenced by the sequence number.
+func (client *Client) UidlAll() (msgInfos []*MessageInfo, err error) {
+	_, err = client.Text.Cmd("UIDL")
+	if err != nil {
+		return
+	}
+	lines, err := client.Text.ReadMultiLines()
+	if err != nil {
+		return
+	}
+	msgInfos = make([]*MessageInfo, len(lines))
+	for i, line := range lines {
+		var seq uint32
+		var uid string
+		fields := strings.Fields(line)
+		seq, err = stringToUint32(fields[0])
+		if err != nil {
+			return
+		}
+		uid = fields[1]
+		msgInfos[i] = &MessageInfo{
+			Seq: seq,
+			Uid: uid,
+		}
+	}
 	return
 }
 
