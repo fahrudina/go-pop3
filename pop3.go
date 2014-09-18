@@ -30,8 +30,9 @@ func Dial(addr string) (*Client, error) {
 	return NewClient(conn)
 }
 
-func DialTLS(addr string) (*Client, error) {
-	conn, err := tls.Dial("tcp", addr, nil)
+func DialTLS(addr string, config *tls.Config) (*Client, error) {
+	host, _, _ := net.SplitHostPort(addr)
+	conn, err := tls.Dial("tcp", addr, setServerName(config, host))
 	if err != nil {
 		return nil, err
 	}
@@ -225,4 +226,18 @@ func stringToUint32(intString string) (uint32, error) {
 		return 0, err
 	}
 	return uint32(val), nil
+}
+
+// setServerName returns a new TLS configuration with ServerName set to host if
+// the original configuration was nil or config.ServerName was empty.
+// Copied from go-imap: code.google.com/p/go-imap/go1/imap
+func setServerName(config *tls.Config, host string) *tls.Config {
+	if config == nil {
+		config = &tls.Config{ServerName: host}
+	} else if config.ServerName == "" {
+		c := *config
+		c.ServerName = host
+		config = &c
+	}
+	return config
 }
