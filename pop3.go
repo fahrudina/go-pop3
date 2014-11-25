@@ -6,6 +6,7 @@ import (
 	"net"
 	"strconv"
 	"strings"
+	"time"
 )
 
 type Client struct {
@@ -174,6 +175,18 @@ func (client *Client) Rset() (err error) {
 
 // Quit sends the QUIT message to the POP3 server and closes the connection.
 func (client *Client) Quit() (err error) {
+	_, err = client.Text.Cmd("QUIT")
+	if err != nil {
+		return err
+	}
+	client.Text.Close()
+	return
+}
+
+// Quit sends the QUIT message to the POP3 server and closes the connection.
+// Set a timeout as a result of hanging connections during the Quit call in practice.
+func (client *Client) QuitTimeout(rwTimeout time.Duration) (err error) {
+	client.conn.SetDeadline(time.Now().Add(rwTimeout))
 	_, err = client.Text.Cmd("QUIT")
 	if err != nil {
 		return err
