@@ -10,8 +10,9 @@ import (
 )
 
 type Client struct {
-	Text *Connection
-	conn net.Conn
+	Text    *Connection
+	conn    net.Conn
+	timeout time.Duration
 }
 
 // MessageInfo represents the message attributes returned by a LIST command.
@@ -31,9 +32,27 @@ func Dial(addr string) (*Client, error) {
 	return NewClient(conn)
 }
 
+func DialTimeout(addr string, timeout time.Duration) (*Client, error) {
+	conn, err := net.DialTimeout("tcp", addr, timeout)
+	if err != nil {
+		return nil, err
+	}
+	return NewClient(conn)
+}
+
 func DialTLS(addr string, config *tls.Config) (*Client, error) {
 	host, _, _ := net.SplitHostPort(addr)
 	conn, err := tls.Dial("tcp", addr, setServerName(config, host))
+	if err != nil {
+		return nil, err
+	}
+	return NewClient(conn)
+}
+
+func DialTLSTimeout(addr string, config *tls.Config, timeout time.Duration) (*Client, error) {
+	host, _, _ := net.SplitHostPort(addr)
+	d := net.Dialer{Timeout: timeout}
+	conn, err := tls.DialWithDialer(&d, "tcp", addr, setServerName(config, host))
 	if err != nil {
 		return nil, err
 	}
@@ -51,8 +70,14 @@ func NewClient(conn net.Conn) (*Client, error) {
 	return client, nil
 }
 
+func (client *Client) UseTimeouts(timeout time.Duration) {
+	client.timeout = timeout
+}
+
 func (client *Client) User(user string) (err error) {
+	client.setDeadline()
 	_, err = client.Text.Cmd("USER %s", user)
+	client.resetDeadline()
 	return
 }
 
@@ -60,7 +85,9 @@ func (client *Client) User(user string) (err error) {
 // unencrypted unless the connection is already secured by TLS (via DialTLS or
 // some other mechanism).
 func (client *Client) Pass(password string) (err error) {
+	client.setDeadline()
 	_, err = client.Text.Cmd("PASS %s", password)
+	client.resetDeadline()
 	return
 }
 
@@ -80,6 +107,7 @@ func (client *Client) Auth(username, password string) (err error) {
 // maildrop is ignored. In the event of an error, all returned numeric values
 // will be 0.
 func (client *Client) Stat() (count, size uint32, err error) {
+	client.setDeadline()
 	l, err := client.Text.Cmd("STAT")
 	if err != nil {
 		return 0, 0, err
@@ -93,6 +121,7 @@ func (client *Client) Stat() (count, size uint32, err error) {
 	if err != nil {
 		return 0, 0, errors.New("Invalid server response")
 	}
+	client.resetDeadline()
 	return
 }
 
@@ -100,6 +129,7 @@ func (client *Client) Stat() (count, size uint32, err error) {
 // if it exists. If the message does not exist, or another error is encountered,
 // the returned size will be 0.
 func (client *Client) List(msgSeqNum uint32) (size uint32, err error) {
+	client.setDeadline()
 	l, err := client.Text.Cmd("LIST %d", msgSeqNum)
 	if err != nil {
 		return 0, err
@@ -108,12 +138,14 @@ func (client *Client) List(msgSeqNum uint32) (size uint32, err error) {
 	if err != nil {
 		return 0, errors.New("Invalid server response")
 	}
+	client.resetDeadline()
 	return size, nil
 }
 
 // ListAll returns a list of MessageInfo for all messages, containing their
 // sequence number and size.
 func (client *Client) ListAll() (msgInfos []*MessageInfo, err error) {
+	client.setDeadline()
 	_, err = client.Text.Cmd("LIST")
 	if err != nil {
 		return
@@ -139,54 +171,52 @@ func (client *Client) ListAll() (msgInfos []*MessageInfo, err error) {
 			Size: size,
 		}
 	}
+	client.resetDeadline()
 	return
 }
 
 // Retr downloads and returns the given message. The lines are separated by LF,
 // whatever the server sent.
 func (client *Client) Retr(msg uint32) (text string, err error) {
+	client.setDeadline()
 	_, err = client.Text.Cmd("RETR %d", msg)
 	if err != nil {
 		return "", err
 	}
 	lines, err := client.Text.ReadMultiLines()
 	text = strings.Join(lines, lineSeparator)
+	client.resetDeadline()
 	return
 }
 
 // Dele marks the given message as deleted.
 func (client *Client) Dele(msg uint32) (err error) {
+	client.setDeadline()
 	_, err = client.Text.Cmd("DELE %d", msg)
+	client.resetDeadline()
 	return
 }
 
 // Noop does nothing, but will prolong the end of the connection if the server
 // has a timeout set.
 func (client *Client) Noop() (err error) {
+	client.setDeadline()
 	_, err = client.Text.Cmd("NOOP")
+	client.resetDeadline()
 	return
 }
 
 // Rset unmarks any messages marked for deletion previously in this session.
 func (client *Client) Rset() (err error) {
+	client.setDeadline()
 	_, err = client.Text.Cmd("RSET")
+	client.resetDeadline()
 	return
 }
 
 // Quit sends the QUIT message to the POP3 server and closes the connection.
 func (client *Client) Quit() (err error) {
-	_, err = client.Text.Cmd("QUIT")
-	if err != nil {
-		return err
-	}
-	client.Text.Close()
-	return
-}
-
-// Quit sends the QUIT message to the POP3 server and closes the connection.
-// Set a timeout as a result of hanging connections during the Quit call in practice.
-func (client *Client) QuitTimeout(rwTimeout time.Duration) (err error) {
-	client.conn.SetDeadline(time.Now().Add(rwTimeout))
+	client.setDeadline()
 	_, err = client.Text.Cmd("QUIT")
 	if err != nil {
 		return err
@@ -197,20 +227,24 @@ func (client *Client) QuitTimeout(rwTimeout time.Duration) (err error) {
 
 // Uidl retrieves the unique ID of the message referenced by the sequence number.
 func (client *Client) Uidl(msgSeqNum uint32) (uid string, err error) {
+	client.setDeadline()
 	line, err := client.Text.Cmd("UIDL %d", msgSeqNum)
 	if err != nil {
 		return "", err
 	}
 	uid = strings.Fields(line)[1]
+	client.resetDeadline()
 	return
 }
 
 // Uidl retrieves the unique ID of the message referenced by the sequence number.
 func (client *Client) UidlAll() (msgInfos []*MessageInfo, err error) {
+	client.setDeadline()
 	_, err = client.Text.Cmd("UIDL")
 	if err != nil {
 		return
 	}
+	client.setDeadline()
 	lines, err := client.Text.ReadMultiLines()
 	if err != nil {
 		return
@@ -230,7 +264,20 @@ func (client *Client) UidlAll() (msgInfos []*MessageInfo, err error) {
 			Uid: uid,
 		}
 	}
+	client.resetDeadline()
 	return
+}
+
+func (client *Client) setDeadline() {
+	if client.timeout > time.Duration(0) {
+		client.conn.SetDeadline(time.Now().Add(client.timeout))
+	}
+}
+
+func (client *Client) resetDeadline() {
+	if client.timeout > time.Duration(0) {
+		client.conn.SetDeadline(time.Time{})
+	}
 }
 
 func stringToUint32(intString string) (uint32, error) {
