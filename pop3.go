@@ -63,7 +63,9 @@ func NewClient(conn net.Conn) (*Client, error) {
 	text := NewConnection(conn)
 	client := &Client{Text: text, conn: conn}
 	// read greeting
+	client.setDeadline()
 	_, err := client.Text.ReadResponse()
+	client.resetDeadline()
 	if err != nil {
 		return nil, err
 	}
