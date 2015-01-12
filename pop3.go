@@ -56,12 +56,24 @@ func DialTLSTimeout(addr string, config *tls.Config, timeout time.Duration) (*Cl
 	if err != nil {
 		return nil, err
 	}
-	return NewClient(conn)
+	return NewClientWithTimeout(conn, timeout)
 }
 
 func NewClient(conn net.Conn) (*Client, error) {
 	text := NewConnection(conn)
 	client := &Client{Text: text, conn: conn}
+	// read greeting
+	_, err := client.Text.ReadResponse()
+	if err != nil {
+		return nil, err
+	}
+	return client, nil
+}
+
+func NewClientWithTimeout(conn net.Conn, timeout time.Duration) (*Client, error) {
+	text := NewConnection(conn)
+	client := &Client{Text: text, conn: conn}
+	client.UseTimeouts(timeout)
 	// read greeting
 	client.setDeadline()
 	_, err := client.Text.ReadResponse()
