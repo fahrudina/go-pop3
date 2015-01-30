@@ -10,9 +10,11 @@ import (
 )
 
 type Client struct {
-	Text    *Connection
-	conn    net.Conn
-	timeout time.Duration
+	Text      *Connection
+	conn      net.Conn
+	timeout   time.Duration
+	useTLS    bool
+	tlsConfig *tls.Config
 }
 
 // MessageInfo represents the message attributes returned by a LIST command.
@@ -22,66 +24,93 @@ type MessageInfo struct {
 	Uid  string // Message UID
 }
 
-var lineSeparator = "\n"
+type option func(*Client) option
 
-func Dial(addr string) (*Client, error) {
-	conn, err := net.Dial("tcp", addr)
+func Noop() option {
+	return func(c *Client) option {
+		return Noop()
+	}
+}
+
+func UseTLS(config *tls.Config) option {
+	return func(c *Client) option {
+		c.useTLS = true
+		c.tlsConfig = config
+		return Noop()
+	}
+}
+
+func UseTimeout(timeout time.Duration) option {
+	return func(c *Client) option {
+		previous := c.timeout
+		c.UseTimeouts(timeout)
+		return UseTimeout(previous)
+	}
+}
+
+const (
+	PROTOCOL       = "tcp"
+	LINE_SEPARATOR = "\n"
+)
+
+func Dial(addr string, options ...option) (*Client, error) {
+	client := &Client{}
+	for _, option := range options {
+		option(client)
+	}
+	var (
+		conn net.Conn
+		err  error
+	)
+	if !client.useTLS {
+		if client.timeout > time.Duration(0) {
+			conn, err = net.DialTimeout(PROTOCOL, addr, client.timeout)
+		} else {
+			conn, err = net.Dial(PROTOCOL, addr)
+		}
+	} else {
+		host, _, _ := net.SplitHostPort(addr)
+		if client.timeout > time.Duration(0) {
+			d := net.Dialer{Timeout: client.timeout}
+			conn, err = tls.DialWithDialer(&d, PROTOCOL, addr, setServerName(client.tlsConfig, host))
+		} else {
+			conn, err = tls.Dial(PROTOCOL, addr, setServerName(client.tlsConfig, host))
+
+		}
+	}
 	if err != nil {
 		return nil, err
 	}
-	return NewClient(conn)
-}
-
-func DialTimeout(addr string, timeout time.Duration) (*Client, error) {
-	conn, err := net.DialTimeout("tcp", addr, timeout)
+	client.conn = conn
+	err = client.initialize()
 	if err != nil {
 		return nil, err
 	}
-	return NewClient(conn)
+	return client, nil
+
 }
 
-func DialTLS(addr string, config *tls.Config) (*Client, error) {
-	host, _, _ := net.SplitHostPort(addr)
-	conn, err := tls.Dial("tcp", addr, setServerName(config, host))
-	if err != nil {
-		return nil, err
+func NewClient(conn net.Conn, options ...option) (*Client, error) {
+	client := &Client{conn: conn}
+
+	for _, option := range options {
+		option(client)
 	}
-	return NewClient(conn)
-}
 
-func DialTLSTimeout(addr string, config *tls.Config, timeout time.Duration) (*Client, error) {
-	host, _, _ := net.SplitHostPort(addr)
-	d := net.Dialer{Timeout: timeout}
-	conn, err := tls.DialWithDialer(&d, "tcp", addr, setServerName(config, host))
-	if err != nil {
-		return nil, err
-	}
-	return NewClientWithTimeout(conn, timeout)
-}
-
-func NewClient(conn net.Conn) (*Client, error) {
-	text := NewConnection(conn)
-	client := &Client{Text: text, conn: conn}
-	// read greeting
-	_, err := client.Text.ReadResponse()
+	err := client.initialize()
 	if err != nil {
 		return nil, err
 	}
 	return client, nil
 }
 
-func NewClientWithTimeout(conn net.Conn, timeout time.Duration) (*Client, error) {
-	text := NewConnection(conn)
-	client := &Client{Text: text, conn: conn}
-	client.UseTimeouts(timeout)
-	// read greeting
+func (client *Client) initialize() (err error) {
+	text := NewConnection(client.conn)
+	client.Text = text
 	client.setDeadline()
 	defer client.resetDeadline()
-	_, err := client.Text.ReadResponse()
-	if err != nil {
-		return nil, err
-	}
-	return client, nil
+	_, err = client.Text.ReadResponse()
+	return
 }
 
 func (client *Client) UseTimeouts(timeout time.Duration) {
@@ -199,7 +228,7 @@ func (client *Client) Retr(msg uint32) (text string, err error) {
 		return "", err
 	}
 	lines, err := client.Text.ReadMultiLines()
-	text = strings.Join(lines, lineSeparator)
+	text = strings.Join(lines, LINE_SEPARATOR)
 	return
 }
 
