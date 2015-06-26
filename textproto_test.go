@@ -30,7 +30,8 @@ func TestCmdOK(t *testing.T) {
 	responseOK := "+OK\r\n"
 	command := "STAT"
 
-	buffer := make([]byte, 0)
+	var buffer []byte
+	buffer = make([]byte, 0)
 	var fake readWriteFaker
 	fake.Reader = strings.NewReader(responseOK)
 	fake.Writer = &fakeWriter{buffer: &buffer}
@@ -57,7 +58,8 @@ func TestCmdOKWithArgs(t *testing.T) {
 	responseOK := "+OK\r\n"
 	command := "LIST %d"
 
-	buffer := make([]byte, 0)
+	var buffer []byte
+	buffer = make([]byte, 0)
 	var fake readWriteFaker
 	fake.Reader = strings.NewReader(responseOK)
 	fake.Writer = &fakeWriter{buffer: &buffer}
@@ -83,7 +85,8 @@ func TestCmdOKWithArgs(t *testing.T) {
 func TestCmdOKWithMessage(t *testing.T) {
 	responseOK := "+OK 5 messages:\r\n"
 
-	buffer := make([]byte, 0)
+	var buffer []byte
+	buffer = make([]byte, 0)
 	var fake readWriteFaker
 	fake.Reader = strings.NewReader(responseOK)
 	fake.Writer = &fakeWriter{buffer: &buffer}
@@ -105,7 +108,8 @@ func TestCmdOKWithMessage(t *testing.T) {
 func TestCmdERR(t *testing.T) {
 	responseErr := "-ERR An error occured\r\n"
 
-	buffer := make([]byte, 0)
+	var buffer []byte
+	buffer = make([]byte, 0)
 	var fake readWriteFaker
 	fake.Reader = strings.NewReader(responseErr)
 	fake.Writer = &fakeWriter{buffer: &buffer}

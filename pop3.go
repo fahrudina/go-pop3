@@ -9,6 +9,7 @@ import (
 	"time"
 )
 
+// Client for POP3.
 type Client struct {
 	Text      *Connection
 	conn      net.Conn
@@ -21,17 +22,20 @@ type Client struct {
 type MessageInfo struct {
 	Seq  uint32 // Message sequence number
 	Size uint32 // Message size in bytes
-	Uid  string // Message UID
+	UID  string // Message UID
 }
 
 type option func(*Client) option
 
+// Noop is a configuration function that does nothing.
 func Noop() option {
 	return func(c *Client) option {
 		return Noop()
 	}
 }
 
+// UseTLS is a configuration function whose result is passed as a parameter in
+// the Dial function. It configures the client to use TLS.
 func UseTLS(config *tls.Config) option {
 	return func(c *Client) option {
 		c.useTLS = true
@@ -40,6 +44,8 @@ func UseTLS(config *tls.Config) option {
 	}
 }
 
+// UseTimeout is a configuration function whose result is passed as a parameter in
+// the Dial function. It configures the client to use timeouts for each POP3 command.
 func UseTimeout(timeout time.Duration) option {
 	return func(c *Client) option {
 		previous := c.timeout
@@ -49,10 +55,13 @@ func UseTimeout(timeout time.Duration) option {
 }
 
 const (
-	PROTOCOL       = "tcp"
-	LINE_SEPARATOR = "\n"
+	protocol      = "tcp"
+	lineSeparator = "\n"
 )
 
+// Dial connects to the given address and returns a client holding a tcp connection.
+// To pass configuration to the Dial function use the methods UseTLS or UseTimeout.
+// E.g. c, err = pop3.Dial(address, pop3.UseTLS(tlsConfig), pop3.UseTimeout(timeout))
 func Dial(addr string, options ...option) (*Client, error) {
 	client := &Client{}
 	for _, option := range options {
@@ -64,17 +73,17 @@ func Dial(addr string, options ...option) (*Client, error) {
 	)
 	if !client.useTLS {
 		if client.timeout > time.Duration(0) {
-			conn, err = net.DialTimeout(PROTOCOL, addr, client.timeout)
+			conn, err = net.DialTimeout(protocol, addr, client.timeout)
 		} else {
-			conn, err = net.Dial(PROTOCOL, addr)
+			conn, err = net.Dial(protocol, addr)
 		}
 	} else {
 		host, _, _ := net.SplitHostPort(addr)
 		if client.timeout > time.Duration(0) {
 			d := net.Dialer{Timeout: client.timeout}
-			conn, err = tls.DialWithDialer(&d, PROTOCOL, addr, setServerName(client.tlsConfig, host))
+			conn, err = tls.DialWithDialer(&d, protocol, addr, setServerName(client.tlsConfig, host))
 		} else {
-			conn, err = tls.Dial(PROTOCOL, addr, setServerName(client.tlsConfig, host))
+			conn, err = tls.Dial(protocol, addr, setServerName(client.tlsConfig, host))
 
 		}
 	}
@@ -90,6 +99,9 @@ func Dial(addr string, options ...option) (*Client, error) {
 
 }
 
+// NewClient initializeds a client.
+// To pass configuration to the NewClient function use the methods UseTLS or UseTimeout.
+// E.g. c, err = pop3.Dial(address, pop3.UseTLS(tlsConfig), pop3.UseTimeout(timeout))
 func NewClient(conn net.Conn, options ...option) (*Client, error) {
 	client := &Client{conn: conn}
 
@@ -113,10 +125,13 @@ func (client *Client) initialize() (err error) {
 	return
 }
 
+// UseTimeouts adds a timeout to the client. Timeouts are applied on every
+// POP3 command.
 func (client *Client) UseTimeouts(timeout time.Duration) {
 	client.timeout = timeout
 }
 
+// User issues the POP3 User command.
 func (client *Client) User(user string) (err error) {
 	client.setDeadline()
 	defer client.resetDeadline()
@@ -228,7 +243,7 @@ func (client *Client) Retr(msg uint32) (text string, err error) {
 		return "", err
 	}
 	lines, err := client.Text.ReadMultiLines()
-	text = strings.Join(lines, LINE_SEPARATOR)
+	text = strings.Join(lines, lineSeparator)
 	return
 }
 
@@ -269,8 +284,8 @@ func (client *Client) Quit() (err error) {
 	return
 }
 
-// Uidl retrieves the unique ID of the message referenced by the sequence number.
-func (client *Client) Uidl(msgSeqNum uint32) (uid string, err error) {
+// UIDl retrieves the unique ID of the message referenced by the sequence number.
+func (client *Client) UIDl(msgSeqNum uint32) (uid string, err error) {
 	client.setDeadline()
 	defer client.resetDeadline()
 	line, err := client.Text.Cmd("UIDL %d", msgSeqNum)
@@ -281,8 +296,8 @@ func (client *Client) Uidl(msgSeqNum uint32) (uid string, err error) {
 	return
 }
 
-// Uidl retrieves the unique ID of the message referenced by the sequence number.
-func (client *Client) UidlAll() (msgInfos []*MessageInfo, err error) {
+// UIDlAll retrieves the unique IDs and sequence number for all messages.
+func (client *Client) UIDlAll() (msgInfos []*MessageInfo, err error) {
 	client.setDeadline()
 	defer client.resetDeadline()
 	_, err = client.Text.Cmd("UIDL")
@@ -305,7 +320,7 @@ func (client *Client) UidlAll() (msgInfos []*MessageInfo, err error) {
 		uid = fields[1]
 		msgInfos[i] = &MessageInfo{
 			Seq: seq,
-			Uid: uid,
+			UID: uid,
 		}
 	}
 	return
